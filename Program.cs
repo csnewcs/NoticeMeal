@@ -21,7 +21,10 @@ namespace NoticeMeal
             clientEventSet();
             await client.LoginAsync(TokenType.Bot, setting["token"].ToString());
             await client.StartAsync();
-            await Task.Delay(-1);
+            while (true) {
+                await Task.Delay(30000);
+                await send();
+            }
         }
         private JObject getSetting() {
             JObject setting = new JObject();
