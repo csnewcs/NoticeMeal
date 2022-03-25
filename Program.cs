@@ -10,7 +10,8 @@ namespace NoticeMeal
 {
     class Program {
         static void Main(string[] args) => new Program().MainAsync().GetAwaiter().GetResult();
-
+        
+        bool sended = false;
         DiscordSocketClient client;
         JObject setting;
         JObject sendGuildsAndChannels;
@@ -21,9 +22,15 @@ namespace NoticeMeal
             clientEventSet();
             await client.LoginAsync(TokenType.Bot, setting["token"].ToString());
             await client.StartAsync();
+            
             while (true) {
+                if(isSendingTime()) {
+                    try {
+                        await send();
+                    }
+                    catch{}
+                }
                 await Task.Delay(30000);
-                await send();
             }
         }
         private JObject getSetting() {
@@ -104,19 +111,27 @@ namespace NoticeMeal
             const string path = "./send.json";
             File.WriteAllText(path, sendGuildsAndChannels.ToString());
         }
-        
-        private async Task send() {
-            DateTime dt = DateTime.Now.ToUniversalTime();
-            dt = dt.AddHours(9);
-            bool sended = false;
-            if(dt.Hour == 0 && dt.Minute == 1 && !sended) {
-                foreach(var guild in sendGuildsAndChannels) {
-                    string[] meal = getMeal(guild.Value["school"].ToString());
-                    EmbedBuilder builder = new EmbedBuilder().AddField("아침", meal[0]).AddField("점심", meal[1]).AddField("저녁", meal[2]);
-                    await client.GetGuild(ulong.Parse(guild.Key)).GetTextChannel((ulong)guild.Value["channel"]).SendMessageAsync("", embed: builder.Build());
-                }
-            }
+        private bool isSendingTime() {
+            const int SENDHOUR = 0;
+            const int SENDMINUTE = 1;
+            DateTime now = DateTime.Now;
+            bool sendingTime = now.Hour == SENDHOUR && now.Minute == SENDMINUTE && !sended;
+            if(sendingTime) sended = true;
             else sended = false;
+            return sendingTime;
+        }
+        private async Task send() {
+            foreach(var guild in sendGuildsAndChannels) {
+                string[] meal = getMeal(guild.Value["school"].ToString());
+                EmbedBuilder builder = new EmbedBuilder().AddField("아침", meal[0]).AddField("점심", meal[1]).AddField("저녁", meal[2]);
+                ulong guildID = ulong.Parse(guild.Key);
+                ulong channelID = (ulong)guild.Value["channel"];
+                SocketGuild socketGuild = client.GetGuild(guildID);
+                if(socketGuild == null) continue;
+                Console.WriteLine(socketGuild.Name);
+                SocketTextChannel socketTextChannel = socketGuild.GetTextChannel(channelID);
+                await socketTextChannel.SendMessageAsync("", embed: builder.Build());
+            }
         }
         private string[] getMeal(string schoolName) {
             const string baseUrl = "https://scmeal.ml/";
@@ -127,9 +142,11 @@ namespace NoticeMeal
             JArray[] menu = new JArray[] {result["breakfast"] as JArray, result["lunch"] as JArray, result["dinner"] as JArray};
 
             for(int i = 0; i < 3; i++) {
+                meals[i] = "```";
                 foreach(var m in menu[i]) {
                     meals[i] += m.ToString() + "\n";
                 }
+                meals[i] += "```";
             }
             return meals;
         }
